@@ -139,6 +139,73 @@ The following fields exist:
 >   agent of the user that caused the session. This data is not persisted but
 >   used for filtering.
 
+## Aggregate Session Payload
+
+Especially for _request-mode_ sessions (see below), it is common to have
+thousands of requests, and thus sessions, per second.
+
+Under the assumption that these sessions will be short-lived, and exit cleanly
+without observing an error, these sessions can be aggregated together on the
+SDK side, before they are sent to Sentry.
+
+An SDK should aggregate exited sessions without any errors in buckets of up to
+one minute. Sessions are also grouped by `distinct_id`.
+
+A aggregated session update is an item in an envelope called
+`aggregate_sessions`. It consists a JSON payload that looks roughly like this:
+
+```json
+{
+  "started": "2020-02-07T14:16:00Z",
+  "exited_healthy": [
+    { "did": null, "sessions": 1234 },
+    { "did": "optional distinct user id", "sessions": 123 }
+  ],
+  "attrs": {
+    "release": "release name",
+    "environment": "environment name",
+    "ip_address": "optional user ip address for filtering",
+    "user_agent": "optional user agent for filtering"
+  }
+}
+```
+
+Note that this must be enclosed in an envelope. So the full event looks
+something like this:
+
+```json
+{}
+{"type":"aggregate_sessions"}
+{"started":"..."}
+```
+
+For now, only aggregate counts of healthly exited sessions can be sent. In the
+future, this may be extended with other session types, and durations.
+
+The following fields exist:
+
+`timestamp` (optional)
+
+> See above
+
+`started`
+
+> Bucketed, rounded timestamp when the sessions were started. An SDK should
+> aggregate sessions for up to one minute, and round down the `started`
+> timestamp accordingly.
+
+`attrs` (all but release optional)
+
+> See above
+
+`exited_healthy`
+
+> The count of `exited` sessions that did not observe any `errors`, grouped by
+> a distinct id.
+>
+> - `did`: (optional) the distinct user id.
+> - `sessions`: the number of sessions in this group.
+
 ## Crashes vs Sessions
 
 Sessions and error events are two distinct systems within Sentry. Session
